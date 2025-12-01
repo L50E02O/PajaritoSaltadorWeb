@@ -54,9 +54,9 @@ class Game {
    */
   async init() {
     await this.renderer.loadAssets({
-      bird: './public/assets/bird.png',
-      pipe: './public/assets/pipe.png',
-      background: './public/assets/background.png'
+      bird: './assets/bird.png',
+      pipe: './assets/pipe.png',
+      background: './assets/background.png'
     });
     
     this.setupUI();
@@ -382,7 +382,7 @@ class Game {
 // Registrar Service Worker cuando la página carga
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./public/sw.js')
+    navigator.serviceWorker.register('/sw.js', { scope: '/' })
       .then((registration) => {
         console.log('Service Worker registrado:', registration);
       })

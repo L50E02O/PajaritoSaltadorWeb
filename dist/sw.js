@@ -1,27 +1,24 @@
 // Service Worker para PWA offline-first
 const CACHE_NAME = 'pajarito-saltador-v1';
-const ASSETS_TO_CACHE = [
-  '/',
-  '/index.html',
-  '/public/manifest.json',
-  '/src/game.js',
-  '/src/input.js',
-  '/src/physics.js',
-  '/src/renderer.js',
-  '/src/utils.js',
-  '/public/assets/bird.png',
-  '/public/assets/pipe.png',
-  '/public/assets/background.png',
-  '/public/assets/icon-192.png',
-  '/public/assets/icon-512.png'
-];
 
 // Instalación: cachear assets estáticos
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
-        return cache.addAll(ASSETS_TO_CACHE);
+        // Cachear archivos básicos
+        return cache.addAll([
+          '/',
+          '/index.html',
+          '/manifest.json',
+          '/sw.js'
+        ]).then(() => {
+          // Intentar cachear assets (pueden fallar si no existen)
+          return Promise.allSettled([
+            cache.add('/assets/icon-192.png').catch(() => {}),
+            cache.add('/assets/icon-512.png').catch(() => {})
+          ]);
+        });
       })
       .catch((err) => {
         console.error('Error al cachear assets:', err);
