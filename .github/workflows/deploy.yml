@@ -134,8 +134,7 @@ jobs:
     needs: validate-and-build
     if: |
       (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') &&
-      github.event_name != 'pull_request' &&
-      secrets.VERCEL_TOKEN != ''
+      github.event_name != 'pull_request'
     environment:
       name: production
       url: ${{ steps.vercel.outputs.deploy_url }}
@@ -172,6 +171,13 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
+          # Verificar que el token esté configurado
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "Warning: VERCEL_TOKEN not configured. Skipping deployment."
+            echo "deploy_url=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
           echo " Iniciando deployment a Vercel..."
           set -e  # Salir si hay errores
           
