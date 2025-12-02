@@ -170,6 +170,7 @@ jobs:
         id: vercel
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          GITHUB_REPO: ${{ github.repository }}
         run: |
           # Verificar que el token esté configurado
           if [ -z "$VERCEL_TOKEN" ]; then
@@ -181,11 +182,40 @@ jobs:
           echo " Iniciando deployment a Vercel..."
           set -e  # Salir si hay errores
           
-          # Capturar output completo
+          # Primero intentar deployment sin especificar nombre (usa proyecto vinculado si existe)
+          # Si hay un proyecto ya vinculado en .vercel/, esto lo usará automáticamente
+          echo "Attempting deployment (will use linked project if available)..."
+          
           DEPLOY_OUTPUT=$(vercel --prod --yes --token=$VERCEL_TOKEN 2>&1) || {
-            echo " Error en deployment"
-            echo "$DEPLOY_OUTPUT"
-            exit 1
+            ERROR_OUTPUT="$DEPLOY_OUTPUT"
+            echo " First attempt failed, checking error..."
+            echo "$ERROR_OUTPUT"
+            
+            # Si el error es por nombre de proyecto inválido, intentar vincular primero
+            if echo "$ERROR_OUTPUT" | grep -q "Project names can be up to 100 characters\|Project name"; then
+              echo " Project name error detected. Attempting to link project first..."
+              
+              # Intentar vincular con el nombre del repositorio
+              REPO_NAME=$(echo "$GITHUB_REPO" | cut -d'/' -f2 | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9._-]/-/g')
+              echo " Attempting to link project: $REPO_NAME"
+              
+              # Vincular proyecto (esto creará o usará el proyecto existente)
+              vercel link --yes --token=$VERCEL_TOKEN --project="$REPO_NAME" 2>&1 || {
+                echo " Link failed, trying without project name..."
+                vercel link --yes --token=$VERCEL_TOKEN 2>&1 || true
+              }
+              
+              # Intentar deployment de nuevo después de vincular
+              echo " Retrying deployment after linking..."
+              DEPLOY_OUTPUT=$(vercel --prod --yes --token=$VERCEL_TOKEN 2>&1) || {
+                echo " Error en deployment después de vincular"
+                echo "$DEPLOY_OUTPUT"
+                exit 1
+              }
+            else
+              echo " Error en deployment (no es problema de nombre)"
+              exit 1
+            fi
           }
           
           echo "=== Vercel Deployment Output ==="
