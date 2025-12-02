@@ -169,8 +169,8 @@ class Game {
       pipe.x -= this.pipeSpeed * deltaTime;
     });
     
-    // Eliminar tubos fuera de pantalla
-    this.pipes = this.pipes.filter(pipe => pipe.x + pipe.width > -100);
+    // Eliminar tubos fuera de pantalla (más estricto para evitar artefactos visuales)
+    this.pipes = this.pipes.filter(pipe => pipe.x + pipe.width > -50 && pipe.x < this.canvas.width + 50);
     
     // Generar nuevos tubos
     this.pipeSpawnTimer += deltaTime;

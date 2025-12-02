@@ -8,30 +8,64 @@ class Renderer {
     this.ctx = canvas.getContext('2d');
     this.assets = {};
     this.setupCanvas();
+    this.setupResizeListener();
   }
 
   /**
    * Configura el canvas con el tamaño adecuado
    */
   setupCanvas() {
-    // Tamaño base del juego
+    // Usar el tamaño completo de la ventana
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+
+    // Tamaño base del juego (aspect ratio 2:3)
     const baseWidth = 400;
     const baseHeight = 600;
+    const aspectRatio = baseWidth / baseHeight;
 
-    // Ajustar a la pantalla manteniendo aspect ratio
-    const maxWidth = window.innerWidth;
-    const maxHeight = window.innerHeight;
+    // Calcular escala para mostrar todo el contenido (contain mode)
+    // Usar la escala menor para que todo se vea sin recortes
+    const scaleX = width / baseWidth;
+    const scaleY = height / baseHeight;
+    const scale = Math.min(scaleX, scaleY);
 
-    let scale = Math.min(maxWidth / baseWidth, maxHeight / baseHeight, 1);
-    scale = Math.max(scale, 0.5); // Mínimo 50% del tamaño original
+    // Calcular dimensiones finales del canvas
+    const canvasWidth = baseWidth * scale;
+    const canvasHeight = baseHeight * scale;
 
+    // Resetear el contexto
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    // El canvas interno mantiene el tamaño base para la lógica del juego
     this.canvas.width = baseWidth;
     this.canvas.height = baseHeight;
-    this.canvas.style.width = `${baseWidth * scale}px`;
-    this.canvas.style.height = `${baseHeight * scale}px`;
+    
+    // El canvas visual se ajusta al tamaño calculado y se centra
+    this.canvas.style.width = `${canvasWidth}px`;
+    this.canvas.style.height = `${canvasHeight}px`;
+    this.canvas.style.display = 'block';
+    this.canvas.style.position = 'absolute';
+    this.canvas.style.top = '50%';
+    this.canvas.style.left = '50%';
+    this.canvas.style.margin = '0';
+    this.canvas.style.transform = 'translate(-50%, -50%)';
+    
+    // Escalar el contexto para que el contenido se ajuste
+    this.setupCanvasTransform();
+  }
 
-    // Escalar contexto para mantener resolución
-    this.ctx.scale(1, 1);
+  /**
+   * Configura el listener para redimensionar la ventana
+   */
+  setupResizeListener() {
+    let resizeTimeout;
+    window.addEventListener('resize', () => {
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(() => {
+        this.setupCanvas();
+      }, 100);
+    });
   }
 
   /**
@@ -116,10 +150,10 @@ class Renderer {
     ctx.lineWidth = 3;
     ctx.strokeRect(0, 0, 60, 400);
 
-    // Detalles
+    // Detalles solo en los extremos (parte superior e inferior)
     ctx.fillStyle = '#32CD32';
-    ctx.fillRect(5, 5, 50, 20);
-    ctx.fillRect(5, 375, 50, 20);
+    ctx.fillRect(5, 5, 50, 20); // Parte superior
+    ctx.fillRect(5, 380, 50, 15); // Parte inferior (ajustado para que no aparezca en el medio)
 
     return new Promise((resolve) => {
       const img = new Image();
@@ -132,7 +166,28 @@ class Renderer {
    * Limpia el canvas
    */
   clear() {
+    // Resetear transformaciones antes de limpiar para asegurar que se limpie todo
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    // Restaurar el escalado después de limpiar
+    this.setupCanvasTransform();
+  }
+
+  /**
+   * Configura la transformación del canvas (escalado)
+   */
+  setupCanvasTransform() {
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    const baseWidth = 400;
+    const baseHeight = 600;
+    
+    const scaleX = width / baseWidth;
+    const scaleY = height / baseHeight;
+    const scale = Math.min(scaleX, scaleY);
+    
+    // Aplicar el escalado
+    this.ctx.scale(scale, scale);
   }
 
   /**
@@ -190,13 +245,34 @@ class Renderer {
    * @param {Object} pipe - Objeto tubo {x, y, width, height}
    */
   drawPipe(pipe) {
-    this.ctx.drawImage(
-      this.assets.pipe,
-      pipe.x,
-      pipe.y,
-      pipe.width,
-      pipe.height
-    );
+    // Solo dibujar si el tubo está dentro o cerca del área visible
+    // Evitar dibujar tubos que están muy fuera de pantalla
+    if (pipe.x + pipe.width < -50 || pipe.x > this.canvas.width + 50) {
+      return;
+    }
+    
+    // Dibujar el tubo directamente con formas simples
+    const ctx = this.ctx;
+    
+    // Guardar el estado del contexto
+    ctx.save();
+    
+    // Tubo verde principal
+    ctx.fillStyle = '#228B22';
+    ctx.fillRect(pipe.x, pipe.y, pipe.width, pipe.height);
+    
+    // Borde oscuro más grueso para darle textura
+    ctx.strokeStyle = '#006400';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(pipe.x, pipe.y, pipe.width, pipe.height);
+    
+    // Borde interno más claro para dar profundidad
+    ctx.strokeStyle = '#32CD32';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(pipe.x + 2, pipe.y + 2, pipe.width - 4, pipe.height - 4);
+    
+    // Restaurar el estado del contexto
+    ctx.restore();
   }
 
   /**
