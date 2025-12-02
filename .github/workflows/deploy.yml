@@ -274,8 +274,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const core = require('@actions/core');
-            
+            // core ya está disponible automáticamente en github-script
             // Obtener URL del step anterior
             const url = '${{ steps.vercel.outputs.deploy_url }}' || 'https://pajarito-saltador.vercel.app';
             
