@@ -7,52 +7,71 @@ class Renderer {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     this.assets = {};
+    
+    // Viewport virtual para la lógica del juego (aspect ratio 2:3)
+    this.viewport = {
+      width: 400,
+      height: 600
+    };
+    
     this.setupCanvas();
     this.setupResizeListener();
   }
+  
+  /**
+   * Obtiene el ancho del viewport virtual (para la lógica del juego)
+   */
+  get width() {
+    return this.viewport.width;
+  }
+  
+  /**
+   * Obtiene el alto del viewport virtual (para la lógica del juego)
+   */
+  get height() {
+    return this.viewport.height;
+  }
 
   /**
-   * Configura el canvas con el tamaño adecuado
+   * Configura el canvas con el tamaño adecuado (responsive)
    */
   setupCanvas() {
-    // Usar el tamaño completo de la ventana
-    const width = window.innerWidth;
-    const height = window.innerHeight;
-
-    // Tamaño base del juego (aspect ratio 2:3)
-    const baseWidth = 400;
-    const baseHeight = 600;
-    const aspectRatio = baseWidth / baseHeight;
-
-    // Calcular escala para mostrar todo el contenido (contain mode)
-    // Usar la escala menor para que todo se vea sin recortes
-    const scaleX = width / baseWidth;
-    const scaleY = height / baseHeight;
-    const scale = Math.min(scaleX, scaleY);
-
-    // Calcular dimensiones finales del canvas
-    const canvasWidth = baseWidth * scale;
-    const canvasHeight = baseHeight * scale;
-
-    // Resetear el contexto
-    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
-
-    // El canvas interno mantiene el tamaño base para la lógica del juego
-    this.canvas.width = baseWidth;
-    this.canvas.height = baseHeight;
+    // Obtener tamaño real de la pantalla (con devicePixelRatio para alta resolución)
+    const dpr = window.devicePixelRatio || 1;
+    const displayWidth = window.innerWidth;
+    const displayHeight = window.innerHeight;
     
-    // El canvas visual se ajusta al tamaño calculado y se centra
-    this.canvas.style.width = `${canvasWidth}px`;
-    this.canvas.style.height = `${canvasHeight}px`;
+    // Tamaño del viewport virtual (lógica del juego)
+    const viewportWidth = this.viewport.width;
+    const viewportHeight = this.viewport.height;
+    const viewportAspect = viewportWidth / viewportHeight;
+    const screenAspect = displayWidth / displayHeight;
+    
+    // Calcular escalado para mantener aspect ratio (contain mode)
+    const scaleX = displayWidth / viewportWidth;
+    const scaleY = displayHeight / viewportHeight;
+    const scale = Math.min(scaleX, scaleY);
+    
+    // Calcular dimensiones del canvas real (con DPR para alta resolución)
+    const canvasWidth = displayWidth * dpr;
+    const canvasHeight = displayHeight * dpr;
+    
+    // Establecer tamaño real del canvas (en píxeles)
+    this.canvas.width = canvasWidth;
+    this.canvas.height = canvasHeight;
+    
+    // Establecer tamaño visual del canvas (en CSS pixels)
+    this.canvas.style.width = `${displayWidth}px`;
+    this.canvas.style.height = `${displayHeight}px`;
     this.canvas.style.display = 'block';
     this.canvas.style.position = 'absolute';
-    this.canvas.style.top = '50%';
-    this.canvas.style.left = '50%';
+    this.canvas.style.top = '0';
+    this.canvas.style.left = '0';
     this.canvas.style.margin = '0';
-    this.canvas.style.transform = 'translate(-50%, -50%)';
+    this.canvas.style.transform = 'none';
     
-    // Escalar el contexto para que el contenido se ajuste
-    this.setupCanvasTransform();
+    // Escalar el contexto para que el viewport virtual se ajuste al canvas real
+    this.setupCanvasTransform(scale, displayWidth, displayHeight, viewportWidth, viewportHeight);
   }
 
   /**
@@ -166,27 +185,49 @@ class Renderer {
    * Limpia el canvas
    */
   clear() {
-    // Resetear transformaciones antes de limpiar para asegurar que se limpie todo
+    // Resetear transformaciones antes de limpiar
     this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+    // Limpiar toda el área del canvas
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     // Restaurar el escalado después de limpiar
-    this.setupCanvasTransform();
+    const dpr = window.devicePixelRatio || 1;
+    const displayWidth = window.innerWidth;
+    const displayHeight = window.innerHeight;
+    const viewportWidth = this.viewport.width;
+    const viewportHeight = this.viewport.height;
+    const scaleX = displayWidth / viewportWidth;
+    const scaleY = displayHeight / viewportHeight;
+    const scale = Math.min(scaleX, scaleY);
+    this.setupCanvasTransform(scale, displayWidth, displayHeight, viewportWidth, viewportHeight);
   }
 
   /**
-   * Configura la transformación del canvas (escalado)
+   * Configura la transformación del canvas (escalado responsive)
+   * @param {number} scale - Escala calculada
+   * @param {number} displayWidth - Ancho de la pantalla
+   * @param {number} displayHeight - Alto de la pantalla
+   * @param {number} viewportWidth - Ancho del viewport virtual
+   * @param {number} viewportHeight - Alto del viewport virtual
    */
-  setupCanvasTransform() {
-    const width = window.innerWidth;
-    const height = window.innerHeight;
-    const baseWidth = 400;
-    const baseHeight = 600;
+  setupCanvasTransform(scale, displayWidth, displayHeight, viewportWidth, viewportHeight) {
+    const dpr = window.devicePixelRatio || 1;
     
-    const scaleX = width / baseWidth;
-    const scaleY = height / baseHeight;
-    const scale = Math.min(scaleX, scaleY);
+    // Calcular dimensiones escaladas del viewport
+    const scaledWidth = viewportWidth * scale;
+    const scaledHeight = viewportHeight * scale;
     
-    // Aplicar el escalado
+    // Calcular offset para centrar el viewport en el canvas
+    const offsetX = (displayWidth - scaledWidth) / 2;
+    const offsetY = (displayHeight - scaledHeight) / 2;
+    
+    // Resetear transformación
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+    
+    // Escalar por DPR primero
+    this.ctx.scale(dpr, dpr);
+    
+    // Aplicar offset y escalado del viewport
+    this.ctx.translate(offsetX, offsetY);
     this.ctx.scale(scale, scale);
   }
 
@@ -194,13 +235,13 @@ class Renderer {
    * Dibuja el fondo
    */
   drawBackground() {
-    // Gradiente de cielo
-    const gradient = this.ctx.createLinearGradient(0, 0, 0, this.canvas.height);
+    // Gradiente de cielo (usar viewport virtual)
+    const gradient = this.ctx.createLinearGradient(0, 0, 0, this.viewport.height);
     gradient.addColorStop(0, '#87CEEB');
     gradient.addColorStop(0.5, '#98D8E8');
     gradient.addColorStop(1, '#B0E0E6');
     this.ctx.fillStyle = gradient;
-    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    this.ctx.fillRect(0, 0, this.viewport.width, this.viewport.height);
 
     // Nubes simples
     this.ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
@@ -403,7 +444,7 @@ class Renderer {
   drawPipe(pipe) {
     // Solo dibujar si el tubo está dentro o cerca del área visible
     // Evitar dibujar tubos que están muy fuera de pantalla
-    if (pipe.x + pipe.width < -50 || pipe.x > this.canvas.width + 50) {
+    if (pipe.x + pipe.width < -50 || pipe.x > this.viewport.width + 50) {
       return;
     }
     

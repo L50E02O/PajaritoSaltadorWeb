@@ -13,6 +13,14 @@ class Game {
     this.renderer = new Renderer(this.canvas);
     this.input = new InputManager();
     
+    // Usar el viewport del renderer para las dimensiones del juego
+    Object.defineProperty(this, 'gameWidth', {
+      get: () => this.renderer.width
+    });
+    Object.defineProperty(this, 'gameHeight', {
+      get: () => this.renderer.height
+    });
+    
     this.state = 'start'; // 'start', 'playing', 'gameover'
     this.score = 0;
     this.highScore = getHighScore();
@@ -120,8 +128,14 @@ class Game {
     });
     
     // Botón de habilidad
-    document.getElementById('abilityButton').addEventListener('click', (e) => {
+    const abilityButton = document.getElementById('abilityButton');
+    
+    abilityButton.addEventListener('click', (e) => {
       e.stopPropagation();
+      // No activar si está en modo mover
+      if (abilityButton.classList.contains('move-mode')) {
+        return;
+      }
       if (this.state === 'playing') {
         this.activateInvulnerability();
       }
@@ -154,6 +168,12 @@ class Game {
     
     // Configuración de teclas
     this.setupKeySettings();
+    
+    // Configurar movimiento del botón de habilidad
+    this.setupAbilityButtonDrag();
+    
+    // Cargar posición guardada del botón
+    this.loadAbilityButtonPosition();
   }
 
   /**
@@ -215,8 +235,8 @@ class Game {
       this.bird.wingPhase = 0;
       
       // Si toca el suelo o pasa suficiente tiempo, terminar animación
-      if (this.bird.y + this.bird.height >= this.canvas.height || this.bird.deathAnimationTime > 2000) {
-        this.bird.y = Math.min(this.bird.y, this.canvas.height - this.bird.height);
+      if (this.bird.y + this.bird.height >= this.gameHeight || this.bird.deathAnimationTime > 2000) {
+        this.bird.y = Math.min(this.bird.y, this.gameHeight - this.bird.height);
         // El gameOver ya fue llamado, solo esperar a que termine la animación
         return;
       }
@@ -250,8 +270,8 @@ class Game {
       this.bird.y = 0;
       this.bird.velocity = 0;
     }
-    if (this.bird.y + this.bird.height > this.canvas.height) {
-      this.bird.y = this.canvas.height - this.bird.height;
+    if (this.bird.y + this.bird.height > this.gameHeight) {
+      this.bird.y = this.gameHeight - this.bird.height;
       this.startDeathAnimation();
       this.gameOver();
     }
@@ -268,7 +288,7 @@ class Game {
     });
     
     // Eliminar tubos fuera de pantalla (más estricto para evitar artefactos visuales)
-    this.pipes = this.pipes.filter(pipe => pipe.x + pipe.width > -50 && pipe.x < this.canvas.width + 50);
+    this.pipes = this.pipes.filter(pipe => pipe.x + pipe.width > -50 && pipe.x < this.gameWidth + 50);
     
     // Generar nuevos tubos
     this.pipeSpawnTimer += deltaTime;
@@ -282,11 +302,11 @@ class Game {
    * Genera un nuevo par de tubos
    */
   spawnPipe() {
-    const gapY = Math.random() * (this.canvas.height - this.pipeGap - 200) + 100;
+    const gapY = Math.random() * (this.gameHeight - this.pipeGap - 200) + 100;
     
     // Tubo superior
     this.pipes.push({
-      x: this.canvas.width,
+      x: this.gameWidth,
       y: 0,
       width: this.pipeWidth,
       height: gapY,
@@ -295,10 +315,10 @@ class Game {
     
     // Tubo inferior
     this.pipes.push({
-      x: this.canvas.width,
+      x: this.gameWidth,
       y: gapY + this.pipeGap,
       width: this.pipeWidth,
-      height: this.canvas.height - (gapY + this.pipeGap),
+      height: this.gameHeight - (gapY + this.pipeGap),
       passed: false
     });
   }
@@ -591,8 +611,104 @@ class Game {
     // Inicializar display
     abilityKeyInput.textContent = this.getKeyDisplayName(this.abilities.invulnerability.key);
     
+    // Configurar toggle para mover botón
+    const moveButtonToggle = document.getElementById('moveButtonToggle');
+    if (moveButtonToggle) {
+      moveButtonToggle.addEventListener('click', () => {
+        const isActive = moveButtonToggle.classList.toggle('active');
+        this.setMoveMode(isActive);
+      });
+    }
+    
     // Configurar modal de ayuda
     this.setupHelpModal();
+    
+    // Configurar botón de limpiar datos
+    this.setupClearDataButton();
+  }
+
+  /**
+   * Configura el botón para limpiar datos del sitio
+   */
+  setupClearDataButton() {
+    const clearDataButton = document.getElementById('clearDataButton');
+    if (!clearDataButton) return;
+    
+    clearDataButton.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      
+      // Confirmar acción
+      const confirmed = confirm(
+        '¿Estás seguro de que quieres limpiar todos los datos del sitio?\n\n' +
+        'Esto eliminará:\n' +
+        '• Tu récord de puntuación\n' +
+        '• Configuración guardada\n' +
+        '• Cache del Service Worker\n' +
+        '• Todos los datos de almacenamiento\n\n' +
+        'La página se refrescará automáticamente.'
+      );
+      
+      if (!confirmed) return;
+      
+      // Mostrar mensaje de carga
+      clearDataButton.textContent = 'Limpiando...';
+      clearDataButton.disabled = true;
+      
+      try {
+        // Limpiar localStorage
+        localStorage.clear();
+        
+        // Limpiar sessionStorage
+        sessionStorage.clear();
+        
+        // Desregistrar Service Workers
+        if ('serviceWorker' in navigator) {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          for (const registration of registrations) {
+            await registration.unregister();
+          }
+        }
+        
+        // Limpiar Cache Storage
+        if ('caches' in window) {
+          const cacheNames = await caches.keys();
+          await Promise.all(
+            cacheNames.map(cacheName => caches.delete(cacheName))
+          );
+        }
+        
+        // Limpiar IndexedDB (si existe)
+        if ('indexedDB' in window) {
+          try {
+            const databases = await indexedDB.databases();
+            await Promise.all(
+              databases.map(db => {
+                return new Promise((resolve, reject) => {
+                  const deleteReq = indexedDB.deleteDatabase(db.name);
+                  deleteReq.onsuccess = () => resolve();
+                  deleteReq.onerror = () => reject(deleteReq.error);
+                  deleteReq.onblocked = () => resolve(); // Continuar aunque esté bloqueado
+                });
+              })
+            );
+          } catch (error) {
+            console.warn('Error al limpiar IndexedDB:', error);
+          }
+        }
+        
+        // Esperar un momento para asegurar que todo se limpió
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Refrescar la página
+        window.location.reload();
+        
+      } catch (error) {
+        console.error('Error al limpiar datos:', error);
+        alert('Hubo un error al limpiar los datos. Intenta refrescar la página manualmente.');
+        clearDataButton.textContent = 'Limpiar Datos del Sitio';
+        clearDataButton.disabled = false;
+      }
+    });
   }
 
   /**
@@ -856,6 +972,174 @@ class Game {
    */
   updateHighScoreDisplay() {
     document.getElementById('highScore').textContent = `Récord: ${this.highScore}`;
+  }
+
+  /**
+   * Configura el arrastre del botón de habilidad
+   */
+  setupAbilityButtonDrag() {
+    const abilityContainer = document.getElementById('abilityContainer');
+    const abilityButton = document.getElementById('abilityButton');
+    
+    if (!abilityContainer || !abilityButton) return;
+    
+    let isDragging = false;
+    let startX = 0;
+    let startY = 0;
+    let initialX = 0;
+    let initialY = 0;
+    let moveMode = false;
+    
+    // Función para obtener posición desde estilo
+    const getPosition = (element) => {
+      const style = window.getComputedStyle(element);
+      const left = parseFloat(style.left) || 0;
+      const bottom = parseFloat(style.bottom) || 0;
+      const top = parseFloat(style.top) || 0;
+      const right = parseFloat(style.right) || 0;
+      
+      // Convertir a coordenadas absolutas
+      if (style.bottom !== 'auto') {
+        return { x: left, y: window.innerHeight - bottom - element.offsetHeight };
+      } else {
+        return { x: left, y: top };
+      }
+    };
+    
+    // Función para establecer posición
+    const setPosition = (element, x, y) => {
+      // Mantener dentro de los límites de la pantalla
+      const maxX = window.innerWidth - element.offsetWidth;
+      const maxY = window.innerHeight - element.offsetHeight;
+      
+      x = Math.max(0, Math.min(x, maxX));
+      y = Math.max(0, Math.min(y, maxY));
+      
+      element.style.left = `${x}px`;
+      element.style.top = `${y}px`;
+      element.style.bottom = 'auto';
+      element.style.right = 'auto';
+    };
+    
+    // Iniciar arrastre
+    const startDrag = (e) => {
+      if (!moveMode) return;
+      
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // Prevenir activación de habilidad durante arrastre
+      abilityButton.style.pointerEvents = 'none';
+      
+      isDragging = true;
+      abilityContainer.classList.add('dragging');
+      
+      const pos = getPosition(abilityContainer);
+      initialX = pos.x;
+      initialY = pos.y;
+      
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      
+      startX = clientX - initialX;
+      startY = clientY - initialY;
+    };
+    
+    // Mover durante el arrastre
+    const drag = (e) => {
+      if (!isDragging || !moveMode) return;
+      
+      e.preventDefault();
+      
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      
+      const newX = clientX - startX;
+      const newY = clientY - startY;
+      
+      setPosition(abilityContainer, newX, newY);
+    };
+    
+    // Finalizar arrastre
+    const stopDrag = () => {
+      if (!isDragging) return;
+      
+      isDragging = false;
+      abilityContainer.classList.remove('dragging');
+      
+      // Restaurar eventos del botón
+      setTimeout(() => {
+        abilityButton.style.pointerEvents = '';
+      }, 100);
+      
+      // Guardar posición
+      const pos = getPosition(abilityContainer);
+      this.saveAbilityButtonPosition(pos.x, pos.y);
+    };
+    
+    // Event listeners para mouse
+    abilityButton.addEventListener('mousedown', startDrag);
+    document.addEventListener('mousemove', drag);
+    document.addEventListener('mouseup', stopDrag);
+    
+    // Event listeners para touch
+    abilityButton.addEventListener('touchstart', startDrag, { passive: false });
+    document.addEventListener('touchmove', drag, { passive: false });
+    document.addEventListener('touchend', stopDrag);
+    
+    // Guardar referencia para setMoveMode
+    this._abilityButtonDrag = {
+      setMoveMode: (enabled) => {
+        moveMode = enabled;
+        if (enabled) {
+          abilityButton.classList.add('move-mode');
+        } else {
+          abilityButton.classList.remove('move-mode');
+          abilityContainer.classList.remove('dragging');
+          isDragging = false;
+        }
+      }
+    };
+  }
+
+  /**
+   * Activa o desactiva el modo de mover el botón
+   * @param {boolean} enabled - Si está habilitado
+   */
+  setMoveMode(enabled) {
+    if (this._abilityButtonDrag) {
+      this._abilityButtonDrag.setMoveMode(enabled);
+    }
+  }
+
+  /**
+   * Carga la posición guardada del botón de habilidad
+   */
+  loadAbilityButtonPosition() {
+    const abilityContainer = document.getElementById('abilityContainer');
+    if (!abilityContainer) return;
+    
+    const saved = localStorage.getItem('abilityButtonPosition');
+    if (saved) {
+      try {
+        const pos = JSON.parse(saved);
+        abilityContainer.style.left = `${pos.x}px`;
+        abilityContainer.style.top = `${pos.y}px`;
+        abilityContainer.style.bottom = 'auto';
+        abilityContainer.style.right = 'auto';
+      } catch (e) {
+        console.warn('Error cargando posición del botón:', e);
+      }
+    }
+  }
+
+  /**
+   * Guarda la posición del botón de habilidad
+   * @param {number} x - Posición X
+   * @param {number} y - Posición Y
+   */
+  saveAbilityButtonPosition(x, y) {
+    localStorage.setItem('abilityButtonPosition', JSON.stringify({ x, y }));
   }
 }
 
