@@ -61,6 +61,9 @@ class Game {
       }
     };
     
+    // Audio de fondo
+    this.backgroundMusic = null;
+    
     this.init();
   }
 
@@ -74,9 +77,32 @@ class Game {
       background: './assets/background.png'
     });
     
+    // Inicializar audio de fondo
+    this.setupAudio();
+    
     this.setupUI();
     this.updateHighScoreDisplay();
     this.startGameLoop();
+  }
+
+  /**
+   * Configura el audio de fondo
+   */
+  setupAudio() {
+    const audioElement = document.getElementById('backgroundMusic');
+    if (audioElement) {
+      this.backgroundMusic = audioElement;
+      // Configurar volumen (0.0 a 1.0)
+      this.backgroundMusic.volume = 0.5; // 50% de volumen
+      // El loop ya está configurado en el HTML
+      
+      // Manejar errores de carga de audio
+      this.backgroundMusic.addEventListener('error', (e) => {
+        console.warn('No se pudo cargar la música de fondo. Asegúrate de tener un archivo de música en ./assets/music.mp3 o ./assets/music.ogg');
+      });
+    } else {
+      console.warn('Elemento de audio no encontrado');
+    }
   }
 
   /**
@@ -744,6 +770,42 @@ class Game {
     
     // Inicializar UI de habilidades
     this.updateAbilityUI();
+    
+    // Reproducir música de fondo
+    this.playBackgroundMusic();
+  }
+
+  /**
+   * Reproduce la música de fondo
+   */
+  playBackgroundMusic() {
+    if (this.backgroundMusic) {
+      // Intentar reproducir (puede fallar si el navegador requiere interacción del usuario)
+      const playPromise = this.backgroundMusic.play();
+      
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            // Música reproducida exitosamente
+            console.log('Música de fondo iniciada');
+          })
+          .catch((error) => {
+            // Autoplay bloqueado o error de reproducción
+            console.warn('No se pudo reproducir la música automáticamente:', error);
+            // La música se reproducirá cuando el usuario interactúe
+          });
+      }
+    }
+  }
+
+  /**
+   * Detiene la música de fondo
+   */
+  stopBackgroundMusic() {
+    if (this.backgroundMusic) {
+      this.backgroundMusic.pause();
+      this.backgroundMusic.currentTime = 0; // Reiniciar al inicio
+    }
   }
 
   /**
@@ -754,6 +816,9 @@ class Game {
     
     this.state = 'gameover';
     this.input.setEnabled(false); // Deshabilitar input cuando termina el juego
+    
+    // Detener música de fondo
+    this.stopBackgroundMusic();
     
     // Actualizar récord
     if (this.score > this.highScore) {

@@ -17,6 +17,17 @@ Las siguientes imágenes son opcionales. Si no están presentes, el juego usará
 - `pipe.png` - Imagen del tubo (recomendado: 60x400 píxeles)
 - `background.png` - Imagen de fondo (opcional, se usa gradiente por defecto)
 
+## Audio
+
+- `music.mp3` - Música de fondo en formato MP3 (recomendado)
+- `music.ogg` - Música de fondo en formato OGG (alternativa para mejor compatibilidad)
+
+**Nota sobre la música:**
+- La música se reproducirá en bucle durante el juego
+- Se detendrá automáticamente cuando el pájaro muera
+- El volumen está configurado al 50% por defecto
+- Si no agregas archivos de música, el juego funcionará normalmente sin música (solo verás un aviso en la consola)
+
 ## Generar Iconos
 
 Puedes generar los iconos manualmente o usar herramientas online como:
