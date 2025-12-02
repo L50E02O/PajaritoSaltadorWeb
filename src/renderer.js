@@ -118,7 +118,7 @@ class Renderer {
     ctx.closePath();
     ctx.fill();
 
-    // Alas
+    // Alas (se animarán en drawBird)
     ctx.fillStyle = '#FFA500';
     ctx.beginPath();
     ctx.ellipse(15, 20, 8, 5, -0.3, 0, Math.PI * 2);
@@ -224,7 +224,7 @@ class Renderer {
 
   /**
    * Dibuja el pajarito
-   * @param {Object} bird - Objeto pajarito {x, y, width, height, rotation}
+   * @param {Object} bird - Objeto pajarito {x, y, width, height, rotation, isDying, deathAnimationTime}
    * @param {boolean} invulnerable - Si el pájaro está invulnerable
    */
   drawBird(bird, invulnerable = false) {
@@ -233,8 +233,38 @@ class Renderer {
     this.ctx.translate(bird.x + bird.width / 2, bird.y + bird.height / 2);
     this.ctx.rotate(bird.rotation || 0);
     
+    // Efectos visuales de muerte
+    if (bird.isDying) {
+      // Parpadeo rojo durante la caída
+      const blinkSpeed = 100; // ms
+      const blinkPhase = (bird.deathAnimationTime % (blinkSpeed * 2)) / blinkSpeed;
+      if (blinkPhase < 1) {
+        // Efecto de "golpe" - tinte rojo
+        this.ctx.globalAlpha = 0.3;
+        this.ctx.fillStyle = '#FF0000';
+        this.ctx.fillRect(-bird.width / 2 - 5, -bird.height / 2 - 5, bird.width + 10, bird.height + 10);
+        this.ctx.globalAlpha = 1;
+      }
+      
+      // Partículas de "choque" (círculos pequeños alrededor)
+      if (bird.deathAnimationTime < 300) {
+        const particleCount = 8;
+        for (let i = 0; i < particleCount; i++) {
+          const angle = (Math.PI * 2 * i) / particleCount;
+          const distance = 15 + (bird.deathAnimationTime / 300) * 10;
+          const x = Math.cos(angle) * distance;
+          const y = Math.sin(angle) * distance;
+          
+          this.ctx.fillStyle = `rgba(255, 100, 0, ${1 - bird.deathAnimationTime / 300})`;
+          this.ctx.beginPath();
+          this.ctx.arc(x, y, 3, 0, Math.PI * 2);
+          this.ctx.fill();
+        }
+      }
+    }
+    
     // Escudo dorado cuando está invulnerable (dibujar primero para que esté detrás)
-    if (invulnerable) {
+    if (invulnerable && !bird.isDying) {
       // Círculo exterior brillante
       const gradient = this.ctx.createRadialGradient(0, 0, 0, 0, 0, bird.width / 2 + 15);
       gradient.addColorStop(0, 'rgba(255, 215, 0, 0.8)');
@@ -267,16 +297,103 @@ class Renderer {
       this.ctx.shadowBlur = 0;
     }
     
-    // Dibujar el pájaro
-    this.ctx.drawImage(
-      this.assets.bird,
-      -bird.width / 2,
-      -bird.height / 2,
-      bird.width,
-      bird.height
-    );
+    // Dibujar el pájaro con animación de alas (o sin alas si está muriendo)
+    this.drawAnimatedBird(bird);
     
     this.ctx.restore();
+  }
+
+  /**
+   * Dibuja el pájaro con animación de alas
+   * @param {Object} bird - Objeto pajarito con wingPhase, isDying
+   */
+  drawAnimatedBird(bird) {
+    const ctx = this.ctx;
+    
+    // Si está muriendo, usar colores más apagados
+    const bodyColor = bird.isDying ? '#CCAA00' : '#FFD700';
+    const beakColor = bird.isDying ? '#CC6600' : '#FF8C00';
+    const wingColor = bird.isDying ? '#CC8800' : '#FFA500';
+    const wingColor2 = bird.isDying ? '#AA6600' : '#FF8C00';
+    
+    // Cuerpo del pajarito (círculo)
+    ctx.fillStyle = bodyColor;
+    ctx.beginPath();
+    ctx.arc(0, 0, 12, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Ojo (cerrado si está muriendo)
+    if (!bird.isDying) {
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.arc(5, -3, 3, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      // Ojo cerrado (línea)
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(2, -3);
+      ctx.lineTo(8, -3);
+      ctx.stroke();
+    }
+    
+    // Pico
+    ctx.fillStyle = beakColor;
+    ctx.beginPath();
+    ctx.moveTo(12, 0);
+    ctx.lineTo(20, -3);
+    ctx.lineTo(20, 3);
+    ctx.closePath();
+    ctx.fill();
+    
+    // Animación de alas basada en wingPhase (solo si no está muriendo)
+    if (!bird.isDying && bird.wingPhase !== undefined) {
+      const wingAngle = Math.sin(bird.wingPhase || 0) * 0.5; // Movimiento de -0.5 a 0.5 radianes
+      
+      // Ala izquierda (principal)
+      ctx.save();
+      ctx.translate(-5, 5);
+      ctx.rotate(-0.3 + wingAngle);
+      ctx.fillStyle = wingColor;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 8, 5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      
+      // Ala derecha (más pequeña, efecto de profundidad)
+      ctx.save();
+      ctx.translate(-3, 6);
+      ctx.rotate(-0.2 + wingAngle * 0.7);
+      ctx.fillStyle = wingColor2;
+      ctx.globalAlpha = 0.7;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 6, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    } else if (bird.isDying) {
+      // Alas caídas cuando está muriendo
+      ctx.save();
+      ctx.translate(-5, 5);
+      ctx.rotate(0.5); // Ala caída
+      ctx.fillStyle = wingColor;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 8, 5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      
+      ctx.save();
+      ctx.translate(-3, 6);
+      ctx.rotate(0.4);
+      ctx.fillStyle = wingColor2;
+      ctx.globalAlpha = 0.7;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 6, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    }
   }
 
   /**

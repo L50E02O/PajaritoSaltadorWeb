@@ -23,7 +23,10 @@ class Game {
       width: 40,
       height: 30,
       velocity: 0,
-      rotation: 0
+      rotation: 0,
+      wingPhase: 0, // Fase de animación de alas
+      isDying: false, // Estado de animación de muerte
+      deathAnimationTime: 0 // Tiempo transcurrido en animación de muerte
     };
     
     this.pipes = [];
@@ -170,17 +173,51 @@ class Game {
    * @param {boolean} shouldJump - Si debe saltar en este frame
    */
   updateBird(deltaTime, shouldJump) {
+    // Si está en animación de muerte, manejar caída especial
+    if (this.bird.isDying) {
+      this.bird.deathAnimationTime += deltaTime;
+      
+      // Aplicar gravedad aumentada para caída dramática
+      Physics.applyGravity(this.bird, this.gravity * 1.5, deltaTime);
+      Physics.clampVelocity(this.bird, this.maxVelocity * 1.5);
+      
+      // Rotación extrema hacia abajo (más dramática)
+      const targetRotation = Math.PI; // 180 grados (cabeza abajo)
+      this.bird.rotation += (targetRotation - this.bird.rotation) * 0.15;
+      
+      // Detener animación de alas
+      this.bird.wingPhase = 0;
+      
+      // Si toca el suelo o pasa suficiente tiempo, terminar animación
+      if (this.bird.y + this.bird.height >= this.canvas.height || this.bird.deathAnimationTime > 2000) {
+        this.bird.y = Math.min(this.bird.y, this.canvas.height - this.bird.height);
+        // El gameOver ya fue llamado, solo esperar a que termine la animación
+        return;
+      }
+      
+      return;
+    }
+    
     // Salto
     if (shouldJump) {
       Physics.applyJump(this.bird, this.jumpForce);
+      this.bird.wingPhase = 0; // Resetear fase de alas al saltar
     }
     
     // Gravedad
     Physics.applyGravity(this.bird, this.gravity, deltaTime);
     Physics.clampVelocity(this.bird, this.maxVelocity);
     
-    // Rotación basada en velocidad
-    this.bird.rotation = Math.min(this.bird.velocity * 0.003, Math.PI / 2);
+    // Rotación basada en velocidad (más suave y realista)
+    const targetRotation = Math.min(this.bird.velocity * 0.002, Math.PI / 2);
+    this.bird.rotation += (targetRotation - this.bird.rotation) * 0.1; // Interpolación suave
+    
+    // Animación de alas (más rápido cuando sube, más lento cuando baja)
+    const wingSpeed = this.bird.velocity < 0 ? 15 : 8; // Más rápido subiendo
+    this.bird.wingPhase += deltaTime * wingSpeed;
+    if (this.bird.wingPhase > Math.PI * 2) {
+      this.bird.wingPhase -= Math.PI * 2;
+    }
     
     // Límites del canvas - solo game over si toca el suelo
     if (this.bird.y < 0) {
@@ -189,6 +226,7 @@ class Game {
     }
     if (this.bird.y + this.bird.height > this.canvas.height) {
       this.bird.y = this.canvas.height - this.bird.height;
+      this.startDeathAnimation();
       this.gameOver();
     }
   }
@@ -248,6 +286,11 @@ class Game {
       return;
     }
     
+    // Si ya está muriendo, no verificar más colisiones
+    if (this.bird.isDying) {
+      return;
+    }
+    
     const birdRect = {
       x: this.bird.x,
       y: this.bird.y,
@@ -264,10 +307,23 @@ class Game {
       };
       
       if (checkCollision(birdRect, pipeRect)) {
+        this.startDeathAnimation();
         this.gameOver();
         return;
       }
     }
+  }
+
+  /**
+   * Inicia la animación de muerte del pájaro
+   */
+  startDeathAnimation() {
+    if (this.bird.isDying) return; // Ya está muriendo
+    
+    this.bird.isDying = true;
+    this.bird.deathAnimationTime = 0;
+    // Aumentar velocidad hacia abajo para efecto dramático
+    this.bird.velocity = Math.max(this.bird.velocity, 200);
   }
 
   /**
@@ -667,6 +723,9 @@ class Game {
     this.bird.y = 250;
     this.bird.velocity = 0;
     this.bird.rotation = 0;
+    this.bird.wingPhase = 0;
+    this.bird.isDying = false;
+    this.bird.deathAnimationTime = 0;
     
     this.input.reset();
     this.input.setEnabled(true); // Habilitar input cuando empieza el juego

@@ -96,6 +96,9 @@
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
             transition: all 0.3s;
             min-width: 120px;
+            touch-action: manipulation; /* Mejora la respuesta táctil en móvil */
+            -webkit-tap-highlight-color: transparent; /* Elimina el resaltado azul en móvil */
+            user-select: none; /* Evita selección de texto al tocar */
         }
 
         #abilityButton:hover:not(.cooldown):not(.active) {
@@ -105,6 +108,14 @@
 
         #abilityButton:active:not(.cooldown):not(.active) {
             transform: scale(0.95);
+        }
+
+        /* Mejorar feedback táctil en móvil */
+        @media (hover: none) and (pointer: coarse) {
+            #abilityButton:active:not(.cooldown):not(.active) {
+                background: #3d8b40;
+                transform: scale(0.9);
+            }
         }
 
         #abilityButton.active {
@@ -148,8 +159,6 @@
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            font-size: 20px;
-            color: white;
             transition: all 0.3s;
             pointer-events: all;
             z-index: 100;
@@ -158,6 +167,18 @@
         #settingsButton:hover {
             background: rgba(255, 255, 255, 0.3);
             transform: rotate(90deg);
+        }
+
+        .gear-icon {
+            width: 20px;
+            height: 20px;
+            display: inline-block;
+        }
+
+        .gear-icon svg {
+            width: 100%;
+            height: 100%;
+            fill: white;
         }
 
         #settingsPanel {
@@ -437,7 +458,13 @@
     <div id="gameContainer">
         <canvas id="gameCanvas"></canvas>
         <div id="ui">
-            <button id="settingsButton" title="Configuración">⚙️</button>
+            <button id="settingsButton" title="Configuración">
+                <div class="gear-icon">
+                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 15.5A3.5 3.5 0 0 1 8.5 12A3.5 3.5 0 0 1 12 8.5a3.5 3.5 0 0 1 3.5 3.5a3.5 3.5 0 0 1-3.5 3.5m7.43-2.53c.04-.32.07-.64.07-.97c0-.33-.03-.66-.07-1l2.11-1.63c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.31-.61-.22l-2.49 1c-.52-.4-1.06-.73-1.69-.98l-.37-2.65A.506.506 0 0 0 14 2h-4c-.25 0-.46.18-.5.42l-.37 2.65c-.63.25-1.17.59-1.69.98l-2.49-1c-.22-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64L4.57 11c-.04.34-.07.67-.07 1c0 .33.03.65.07.97l-2.11 1.66c-.19.15-.25.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1.01c.52.4 1.06.74 1.69.99l.37 2.65c.04.24.25.42.5.42h4c.25 0 .46-.18.5-.42l.37-2.65c.63-.26 1.17-.59 1.69-.99l2.49 1.01c.22.08.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.66Z"/>
+                    </svg>
+                </div>
+            </button>
             <div id="settingsPanel">
                 <button class="close-settings" id="closeSettings">×</button>
                 <h3>Configuración</h3>
