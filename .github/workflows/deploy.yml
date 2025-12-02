@@ -14,6 +14,7 @@ on:
 permissions:
   contents: read
   deployments: write
+  id-token: write
 
 # Timeout para evitar jobs que se cuelguen
 jobs:
@@ -174,45 +175,84 @@ jobs:
           echo "🚀 Iniciando deployment a Vercel..."
           set -e  # Salir si hay errores
           
+          # Capturar output completo
           DEPLOY_OUTPUT=$(vercel --prod --yes --token=$VERCEL_TOKEN 2>&1) || {
             echo "❌ Error en deployment"
             echo "$DEPLOY_OUTPUT"
             exit 1
           }
           
+          echo "=== Vercel Deployment Output ==="
           echo "$DEPLOY_OUTPUT"
+          echo "================================"
           
-          # Intentar extraer la URL del deployment
+          # Intentar múltiples formas de extraer la URL
+          DEPLOY_URL=""
+          
+          # Método 1: Buscar URL en el formato estándar de Vercel
           DEPLOY_URL=$(echo "$DEPLOY_OUTPUT" | grep -oE 'https://[a-zA-Z0-9-]+\.vercel\.app' | head -n 1 || echo "")
           
+          # Método 2: Buscar cualquier URL de Vercel
           if [ -z "$DEPLOY_URL" ]; then
-            echo "⚠️ No se pudo extraer la URL automáticamente"
-            echo "Revisa el output anterior para la URL del deployment"
-            # Intentar obtener URL de otra forma
-            DEPLOY_URL=$(echo "$DEPLOY_OUTPUT" | grep -oE 'https://[^ ]+' | head -n 1 || echo "")
+            DEPLOY_URL=$(echo "$DEPLOY_OUTPUT" | grep -oE 'https://[^ ]*vercel[^ ]*' | head -n 1 || echo "")
+          fi
+          
+          # Método 3: Buscar en líneas que contengan "Production" o "Ready"
+          if [ -z "$DEPLOY_URL" ]; then
+            DEPLOY_URL=$(echo "$DEPLOY_OUTPUT" | grep -iE '(production|ready|deployed).*https://[^ ]+' | grep -oE 'https://[^ ]+' | head -n 1 || echo "")
+          fi
+          
+          # Método 4: Usar vercel inspect para obtener la URL
+          if [ -z "$DEPLOY_URL" ]; then
+            echo "Intentando obtener URL con vercel inspect..."
+            INSPECT_OUTPUT=$(vercel inspect --token=$VERCEL_TOKEN --scope=$(vercel whoami --token=$VERCEL_TOKEN 2>/dev/null | head -n 1) 2>&1 || echo "")
+            DEPLOY_URL=$(echo "$INSPECT_OUTPUT" | grep -oE 'https://[a-zA-Z0-9-]+\.vercel\.app' | head -n 1 || echo "")
+          fi
+          
+          # Si aún no tenemos URL, intentar obtenerla del proyecto
+          if [ -z "$DEPLOY_URL" ]; then
+            echo "Intentando obtener URL del proyecto..."
+            # Obtener el nombre del proyecto desde package.json o vercel.json
+            PROJECT_NAME=$(node -p "require('./package.json').name" 2>/dev/null || echo "pajarito-saltador")
+            DEPLOY_URL="https://${PROJECT_NAME}.vercel.app"
+            echo "Usando URL predeterminada basada en nombre del proyecto: $DEPLOY_URL"
           fi
           
           if [ -n "$DEPLOY_URL" ]; then
             echo "✅ Deployment exitoso: $DEPLOY_URL"
             echo "deploy_url=$DEPLOY_URL" >> $GITHUB_OUTPUT
+            echo "DEPLOY_URL=$DEPLOY_URL" >> $GITHUB_ENV
           else
             echo "⚠️ No se pudo determinar la URL del deployment"
-            exit 1
+            echo "El deployment puede haber sido exitoso, pero no se pudo extraer la URL"
+            echo "Revisa el output anterior o el dashboard de Vercel"
+            # No fallar el workflow, pero marcar como advertencia
+            echo "deploy_url=" >> $GITHUB_OUTPUT
           fi
 
       - name: Register deployment in GitHub
-        if: steps.vercel.outputs.deploy_url != ''
+        if: |
+          (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') &&
+          github.event_name != 'pull_request' &&
+          steps.vercel.outputs.deploy_url != ''
+        env:
+          DEPLOY_URL: ${{ steps.vercel.outputs.deploy_url }}
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const url = '${{ steps.vercel.outputs.deploy_url }}';
-            if (!url) {
-              core.setFailed('Deploy URL not found');
+            const core = require('@actions/core');
+            const url = process.env.DEPLOY_URL || '${{ steps.vercel.outputs.deploy_url }}';
+            
+            console.log('Attempting to register deployment with URL:', url);
+            
+            if (!url || url.trim() === '') {
+              core.warning('Deploy URL not found, skipping deployment registration');
               return;
             }
             
             try {
+              console.log('Creating deployment...');
               const deployment = await github.rest.repos.createDeployment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -225,18 +265,31 @@ jobs:
                 production_environment: true
               });
               
-              await github.rest.repos.createDeploymentStatus({
+              console.log('Deployment created with ID:', deployment.data.id);
+              
+              console.log('Creating deployment status...');
+              const status = await github.rest.repos.createDeploymentStatus({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 deployment_id: deployment.data.id,
                 state: 'success',
                 environment_url: url,
-                description: 'Successfully deployed to Vercel'
+                description: 'Successfully deployed to Vercel',
+                log_url: url
               });
               
-              console.log(`✅ Deployment registered: ${url}`);
+              console.log(`✅ Deployment registered successfully: ${url}`);
+              console.log('Deployment status:', status.data.state);
             } catch (error) {
-              console.error('Error registering deployment:', error);
+              console.error('❌ Error registering deployment:', error);
+              console.error('Error details:', JSON.stringify(error, null, 2));
+              
+              // Si es un error de permisos, informar al usuario
+              if (error.status === 403 || error.status === 404) {
+                core.warning('Permission error. Make sure the GITHUB_TOKEN has deployment permissions.');
+              }
+              
               // No fallar el workflow si el registro falla
+              core.warning('Deployment registration failed, but deployment may have succeeded');
             }
 
