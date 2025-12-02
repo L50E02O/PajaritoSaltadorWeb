@@ -1,13 +1,17 @@
 name: CI
 
+# Este workflow solo se ejecuta en PRs y branches que NO sean main/master
+# Para evitar duplicación con el workflow de deploy
 on:
-  push:
+  pull_request:
     branches:
       - main
       - master
-      - develop
-  pull_request:
+  push:
     branches:
+      - develop
+      - '**'
+    branches-ignore:
       - main
       - master
 

@@ -5,11 +5,8 @@ on:
     branches:
       - main
       - master
-  pull_request:
-    branches:
-      - main
-      - master
-  workflow_dispatch: # Permite ejecutar manualmente
+  # No ejecutar en PRs para evitar duplicación con CI
+  # workflow_dispatch: # Permite ejecutar manualmente
 
 permissions:
   contents: read
